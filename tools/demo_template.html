@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>飞瀑能源管理系统 · 离线演示</title>
+<style>
+:root{--bg:#0f1620;--panel:#16202c;--line:#243343;--tx:#e6edf5;--sub:#8ba0b8;--acc:#2aa8a8;--warn:#e6a23c;--bad:#e0544b;--blu:#3d8bfd}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--tx);font:14px/1.6 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif;padding:0 0 60px}
+header{background:linear-gradient(120deg,#0d3038,#0f1620 70%);padding:26px 40px 0;border-bottom:1px solid var(--line)}
+h1{font-size:22px;font-weight:600;letter-spacing:.5px}
+h1 span.c{color:#3fd0c9}
+.sub{color:var(--sub);font-size:13px;margin-top:6px}
+.badge{display:inline-block;background:#123a3c;color:#3fd0c9;border:1px solid #2a6b68;border-radius:20px;padding:1px 10px;font-size:12px;margin-left:10px;vertical-align:middle}
+nav{display:flex;gap:4px;padding:18px 0;flex-wrap:wrap}
+nav button{background:transparent;border:1px solid var(--line);color:var(--sub);padding:7px 16px;border-radius:6px;cursor:pointer;font-size:13px}
+nav button.on{background:var(--acc);border-color:var(--acc);color:#fff}
+main{padding:24px 40px;max-width:1440px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(196px,1fr));gap:14px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 18px;position:relative;overflow:hidden}
+.card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--acc)}
+.card.w::before{background:var(--warn)}.card.b::before{background:var(--bad)}.card.u::before{background:var(--blu)}
+.k{color:var(--sub);font-size:12px}
+.v{font-size:23px;font-weight:600;margin-top:6px;font-variant-numeric:tabular-nums}
+.v small{font-size:12px;color:var(--sub);margin-left:4px;font-weight:400}
+h2{font-size:15px;font-weight:600;margin:28px 0 12px;color:#cfe0f0}
+table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);border-radius:8px;overflow:hidden;font-size:13px}
+th{background:#1b2836;color:var(--sub);font-weight:500;text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);white-space:nowrap;font-size:12px}
+td{padding:9px 12px;border-bottom:1px solid #1c2733;font-variant-numeric:tabular-nums;white-space:nowrap}
+tr:last-child td{border-bottom:none}
+tbody tr:hover{background:#1a2532}
+.r{text-align:right}
+.tag{display:inline-block;padding:1px 8px;border-radius:10px;font-size:12px}
+.t-ok{background:#123a3c;color:#3fd0c9}.t-w{background:#3a2e16;color:#e6a23c}
+.t-b{background:#3a1d1b;color:#f0796f}.t-i{background:#182b42;color:#6aa9f5}
+.bar{height:7px;background:#1c2733;border-radius:4px;overflow:hidden;min-width:90px}
+.bar i{display:block;height:100%;background:var(--acc)}
+.bar i.w{background:var(--warn)}.bar i.b{background:var(--bad)}
+.pos{color:#3fd0c9}.neg{color:#f0796f}
+footer{color:#5a6b80;font-size:12px;padding:34px 40px 0;text-align:center;line-height:1.9}
+.note{background:#1a2330;border-left:3px solid var(--blu);padding:12px 16px;border-radius:6px;color:#a8bccf;font-size:13px;margin-bottom:18px}
+/* SVG 图表 */
+.chart{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:16px}
+.legend{display:flex;flex-wrap:wrap;gap:14px;margin-top:10px;font-size:12px;color:var(--sub)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+</style>
+</head>
+<body>
+<header>
+  <h1>飞瀑能源管理系统 <span class="c">V1.0</span><span class="badge">离线演示快照</span></h1>
+  <div class="sub">折标煤 · 分时电费 · 15 分钟需量 · 设备能效 · 节能量验证 · 碳排核算 · 预算闸口</div>
+  <nav id="nav"></nav>
+</header>
+<main id="main"></main>
+<footer>本页为静态快照，数据取自演示实例 2026-10 期间，仅展示不含写操作。<br>完整体验请部署系统本体 · 源码见交付包 backend/ frontend/ 目录</footer>
+<script>
+const D = __DATA__;
+const $ = s => document.querySelector(s);
+const money = v => (v==null||v==='')?'—':Number(v).toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2});
+const wan = v => (v==null)?'—':(Math.abs(v)>=10000?(v/10000).toFixed(2)+' 万':money(v));
+const num = v => (v==null)?'—':Number(v).toLocaleString('zh-CN',{maximumFractionDigits:2});
+const pct = v => (v==null||v==='')?'—':(Number(v)*100).toFixed(1)+'%';
+const sgn = v => (v>0?'neg':(v<0?'pos':''));
+const L = k => (D[k] && Array.isArray(D[k].list)) ? D[k].list : [];
+function tbl(cols, rows, empty){
+  if(!rows || !rows.length) return '<div class="note">'+(empty||'暂无数据')+'</div>';
+  let h = '<table><thead><tr>' + cols.map(c=>'<th class="'+(c.r?'r':'')+'">'+c.t+'</th>').join('') + '</tr></thead><tbody>';
+  h += rows.map(r=>'<tr>'+cols.map(c=>'<td class="'+(c.r?'r':'')+'">'+(c.f?c.f(r):(r[c.k]??'—'))+'</td>').join('')+'</tr>').join('');
+  return h + '</tbody></table>';
+}
+// 简易 SVG 折线
+function lineChart(rows, key, color, fmt){
+  if(!rows || rows.length<2) return '';
+  const W=860,H=180,P=36;
+  const vs = rows.map(r=>Number(r[key]||0));
+  const mn = Math.min(...vs), mx = Math.max(...vs);
+  const rng = (mx-mn)||1;
+  const x = i => P + i*(W-2*P)/(rows.length-1);
+  const y = v => H-24 - (v-mn)/rng*(H-52);
+  const pts = vs.map((v,i)=>x(i)+','+y(v)).join(' ');
+  let grid='';
+  for(let g=0;g<=3;g++){const gy=16+g*(H-44)/3;const gv=mx-g*rng/3;
+    grid+='<line x1="'+P+'" y1="'+gy+'" x2="'+(W-P)+'" y2="'+gy+'" stroke="#1c2733"/><text x="4" y="'+(gy+4)+'" fill="#5a6b80" font-size="10">'+fmt(gv)+'</text>';}
+  const labels = rows.map((r,i)=>i%Math.ceil(rows.length/8)===0?'<text x="'+x(i)+'" y="'+(H-6)+'" fill="#5a6b80" font-size="10" text-anchor="middle">'+(r.period||'').slice(2)+'</text>':'').join('');
+  return '<svg viewBox="0 0 '+W+' '+H+'" style="width:100%">'+grid
+    +'<polyline points="'+pts+'" fill="none" stroke="'+color+'" stroke-width="2"/>'
+    +vs.map((v,i)=>'<circle cx="'+x(i)+'" cy="'+y(v)+'" r="3" fill="'+color+'"/>').join('')
+    +'</svg><div class="legend"><span><i style="background:'+color+'"></i>'+key+'</span></div>';
+}
+// 环形图
+function donut(items, colors){
+  const total = items.reduce((a,x)=>a+x.v,0);
+  if(!total) return '';
+  let a0 = -90, segs='';
+  items.forEach((it,i)=>{
+    const a1 = a0 + it.v/total*360;
+    const large = (a1-a0)>180?1:0;
+    const r=70,cx=95,cy=95;
+    const p0=[cx+r*Math.cos(a0*Math.PI/180),cy+r*Math.sin(a0*Math.PI/180)];
+    const p1=[cx+r*Math.cos(a1*Math.PI/180),cy+r*Math.sin(a1*Math.PI/180)];
+    segs+='<path d="M'+cx+','+cy+' L'+p0[0].toFixed(1)+','+p0[1].toFixed(1)
+      +' A'+r+','+r+' 0 '+large+' 1 '+p1[0].toFixed(1)+','+p1[1].toFixed(1)+' Z" fill="'+colors[i%colors.length]+'"/>';
+    a0=a1;});
+  return '<svg viewBox="0 0 190 190" style="width:190px;float:left;margin-right:24px">'
+    +segs+'<circle cx="95" cy="95" r="42" fill="var(--panel)"/>'
+    +'<text x="95" y="92" text-anchor="middle" fill="#8ba0b8" font-size="11">合计</text>'
+    +'<text x="95" y="110" text-anchor="middle" fill="#e6edf5" font-size="14" font-weight="600">'+fmtNum(total)+'</text></svg>';
+}
+const fmtNum = v => v>=10000?(v/10000).toFixed(2)+'万':Math.round(v*100)/100;
+const COLORS=['#2aa8a8','#3d8bfd','#e6a23c','#9a6ae0','#e0544b','#4fd18b','#d08a4f'];
+const PAGES = [];
+const page = o => PAGES.push(o);
+
+page({id:'dash', t:'仪表盘', render(){
+  const b = D.board && D.board.kpi ? D.board.kpi : {};
+  const bg = b.budget || {};
+  const kpi = [
+    ['综合能耗', num(b.tce), 'tce', ''],
+    ['碳排放', num(b.co2), 'tCO₂', 'u'],
+    ['单位产品能耗', b.unitEnergy!=null?b.unitEnergy:'—', 'tce/单位', ''],
+    ['单位产值能耗', b.valueEnergy!=null?b.valueEnergy:'—', 'tce/万元', 'u'],
+    ['最大需量', num(b.maxDemand), 'kW', (b.maxDemand||0)>=(b.capacityKw||1e9)?'b':((b.maxDemand||0)>=0.95*(b.capacityKw||1e9)?'w':'')],
+    ['本期电量', wan(b.elecQty), 'kWh', ''],
+    ['待处置告警', num((b.alarms||{}).未处置||0), '条', (b.alarms||{}).未处置>0?'w':''],
+    ['预算执行率', bg.rate!=null?pct(bg.rate):'—', '', (bg.rate||0)>1?'b':''],
+  ];
+  let h = '<div class="grid">' + kpi.map(k=>'<div class="card '+k[3]+'"><div class="k">'+k[0]+'</div><div class="v">'+(k[1]??'—')+'<small>'+k[2]+'</small></div></div>').join('') + '</div>';
+  h += '<div class="note" style="margin-top:18px">口径：综合能耗 = Σ 物理量 × 折标煤系数；碳排 = Σ 物理量 × 碳排因子（范围一：天然气/柴油，范围二：电力/蒸汽/水/压缩空气）；本期为 2026-10。</div>';
+
+  const yy = L('yoy');
+  if(yy.length){
+    h += '<h2>近 12 期综合能耗趋势（tce）</h2><div class="chart">' + lineChart(yy,'tce','#2aa8a8',v=>v.toFixed(0)) + '</div>';
+    h += tbl([
+      {t:'期间',k:'period'},
+      {t:'综合能耗 tce',r:1,f:r=>num(r.tce)},
+      {t:'环比',r:1,f:r=>r.mom==null?'—':'<span class="'+sgn(r.mom)+'">'+pct(r.mom)+'</span>'},
+      {t:'产量',r:1,f:r=>num(r.qty)},
+      {t:'单位产品能耗',r:1,f:r=>r.unitEnergy},
+      {t:'碳排 tCO₂',r:1,f:r=>num(r.co2)}
+    ], yy.slice(-6)).replace('<table','<h2>近期明细</h2><table');
+  }
+
+  const be = (D.board && D.board.byEnergy) || [];
+  if(be.length){
+    h += '<h2>能源介质结构</h2><div style="overflow:hidden">'
+      + donut(be.map(x=>({v:x.tce,n:x.name})), COLORS)
+      + '<div class="legend" style="padding-top:30px">' + be.map((x,i)=>'<span style="display:block"><i style="background:'+COLORS[i%COLORS.length]+'"></i>'
+        +x.name+' · '+num(x.tce)+' tce · '+pct(x.tce/ (be.reduce((a,z)=>a+z.tce,0)||1))+'</span>').join('') + '</div></div>';
+  }
+
+  const ol = (D.board && D.board.overLines) || [];
+  if(ol.length){
+    h += '<h2>单耗偏离基线产线（超 8% 重点关注）</h2>' + tbl([
+      {t:'产线',k:'line'},
+      {t:'本期单耗',r:1,f:r=>r.unitEnergy},
+      {t:'基线',r:1,f:r=>r.base},
+      {t:'偏离',r:1,f:r=>'<span class="'+sgn(r.dev)+'">'+pct(r.dev)+'</span>'},
+      {t:'级别',f:r=>'<span class="tag '+(r.level==='紧急'?'t-b':(r.level?'t-w':'t-ok'))+'">'+(r.level||'正常')+'</span>'}
+    ], ol);
+  } else {
+    h += '<div class="note" style="margin-top:16px">本期各产线单耗均在基线偏离 8% 以内，运行平稳。</div>';
+  }
+  return h;
+}});
+
+page({id:'energy', t:'能源介质', render(){
+  return tbl([
+    {t:'编码',k:'code'},{t:'名称',k:'name'},{t:'单位',k:'unit'},
+    {t:'折标煤系数',r:1,f:r=>num(r.tceFactor)},
+    {t:'碳排因子',r:1,f:r=>num(r.co2Factor)},
+    {t:'核算范围',f:r=>'<span class="tag '+(r.scope==='范围一'?'t-b':'t-i')+'">'+(r.scope||'—')+'</span>'},
+    {t:'单价',r:1,f:r=>money(r.price)},
+    {t:'计价方式',k:'price_mode'},
+    {t:'状态',f:r=>'<span class="tag t-ok">'+(r.status||'—')+'</span>'}
+  ], L('energy'), '能源介质为主数据基础，折标煤与碳排因子直接决定全部统计口径。');
+}});
+
+page({id:'center', t:'成本中心', render(){
+  return tbl([
+    {t:'编码',k:'code'},{t:'名称',k:'name'},
+    {t:'类型',f:r=>{const m={'辅助':'t-i','生产':'t-ok','管理':'t-w','研发':'t-i','办公':'t-i'};return '<span class="tag '+(m[r.ctype]||'t-i')+'">'+(r.ctype||'—')+'</span>';}},
+    {t:'上级',k:'parent'},{t:'负责人',k:'manager'}
+  ], L('centers'));
+}});
+
+page({id:'meter', t:'计量点', render(){
+  return tbl([
+    {t:'编码',k:'code'},{t:'名称',k:'name'},{t:'介质',f:r=>r.energyName},
+    {t:'中心',f:r=>(r.center||'')+' '+(r.centerName||'')},
+    {t:'产线',k:'line'},
+    {t:'级别',r:1,k:'level'},
+    {t:'倍率',r:1,f:r=>num(r.ratio)},
+    {t:'容量 kW',r:1,f:r=>num(r.capacity)},
+    {t:'本期用量',r:1,f:r=>r.lastUsage!=null?num(r.lastUsage):'—'},
+    {t:'质量',f:r=>r.lastQuality?'<span class="tag '+(r.lastQuality==='正常'?'t-ok':(r.lastQuality==='跳变'?'t-w':'t-i'))+'">'+r.lastQuality+'</span>':'<span class="tag t-b">未抄</span>'},
+    {t:'状态',f:r=>'<span class="tag '+(r.status==='运行'?'t-ok':'t-b')+'">'+(r.status||'—')+'</span>'}
+  ], L('meters'), '计量点按一级（全厂）/二级（车间）/三级（产线）三级计量体系配置。');
+}});
+
+page({id:'reading', t:'抄表与采集', render(){
+  const rows = L('readings');
+  const total = rows.length;
+  const est = rows.filter(r=>r.isEstimate).length;
+  const jump = rows.filter(r=>r.quality==='跳变').length;
+  let h = '<div class="grid">'
+    + '<div class="card"><div class="k">本期抄表记录</div><div class="v">'+total+'<small>条</small></div></div>'
+    + '<div class="card u"><div class="k">估算值</div><div class="v">'+est+'<small>条</small></div></div>'
+    + '<div class="card w"><div class="k">量级跳变</div><div class="v">'+jump+'<small>条</small></div></div>'
+    + '</div><h2>抄表明细</h2>';
+  h += tbl([
+    {t:'期间',k:'period'},
+    {t:'计量点',f:r=>(r.meter_code||'')+' '+(r.meterName||'')},
+    {t:'介质',f:r=>r.energyName},
+    {t:'中心',f:r=>r.centerName||r.center},
+    {t:'日期',k:'date'},
+    {t:'表底',r:1,f:r=>num(r.reading)},
+    {t:'用量',r:1,f:r=>'<b>'+num(r.usage)+'</b>'},
+    {t:'单位',k:'unit'},
+    {t:'质量',f:r=>'<span class="tag '+(r.quality==='正常'?'t-ok':(r.quality==='跳变'?'t-w':'t-i'))+'">'+(r.quality||'—')+'</span>'},
+    {t:'来源',k:'source'}
+  ], rows.slice(0,80), '本期抄表数据（最多展示 80 条）');
+  h += '<div class="note" style="margin-top:14px">校验规则：本期小于上期 → 拒绝（409 表底倒走）；同计量点同期间已有读数 → 拒绝（409 区间重叠）；用量环比放大/缩小超 3 倍且绝对量过百 → 允许入库但标记「跳变」并自动生成告警。用量 =（本期表底 − 上期表底）× 倍率。</div>';
+  return h;
+}});
+
+page({id:'tou', t:'分时与需量', render(){
+  const sm = (D.tou && D.tou.summary) || {};
+  const by = sm.byPeriod || {};
+  const order = ['尖峰','峰','平','谷'];
+  let h = '<div class="grid">'
+    + '<div class="card"><div class="k">本期总电量</div><div class="v">'+num(sm.kwhTotal)+'<small>kWh</small></div></div>'
+    + '<div class="card u"><div class="k">分时电费</div><div class="v">'+wan(sm.energyFee)+'<small>元</small></div></div>'
+    + '<div class="card"><div class="k">平均电价</div><div class="v">'+(sm.avgPrice||'—')+'<small>元/kWh</small></div></div>'
+    + '</div><h2>四时段电费</h2>';
+  h += tbl([
+    {t:'时段',k:'period'},
+    {t:'电量 kWh',r:1,f:r=>num(r.kwh)},
+    {t:'电价 元/kWh',r:1,f:r=>money(r.price)},
+    {t:'电费 元',r:1,f:r=>'<b>'+money(r.amount)+'</b>'},
+    {t:'占比',f:r=>{const t=sm.kwhTotal||1;const v=Math.round(r.kwh/t*100);return '<div class="bar"><i style="width:'+v+'%"></i></div>';}}
+  ], order.map(p=>({period:p, ...(by[p]||{})})));
+  const dm = D.demands || {};
+  h += '<h2>需量</h2><div class="grid">'
+    + '<div class="card"><div class="k">最大需量</div><div class="v">'+num(dm.maxDemand||'—')+'<small>kW</small></div></div>'
+    + '<div class="card '+(dm.status==='超容'?'b':(dm.status==='紧急'?'b':''))+'"><div class="k">状态</div><div class="v">'+(dm.status||'—')+'</div></div>'
+    + '<div class="card"><div class="k">容量</div><div class="v">'+num(dm.capacityKw||'—')+'<small>kW</small></div></div>'
+    + '<div class="card u"><div class="k">容量电费</div><div class="v">'+wan((dm.maxDemand||0)*42)+'<small>元/月（42 元/kW）</small></div></div>'
+    + '</div>';
+  h += '<div class="note" style="margin-top:14px">需量口径：需量 kW = 15 分钟电能增量 ÷ 0.25h；状态分级：≥85% 预警、≥95% 紧急、>100% 超容（自动告警）。容量电费 = 最大需量 × 需量单价，按月计收。</div>';
+  return h;
+}});
+
+page({id:'consumption', t:'能耗分析', render(){
+  const rows = L('consumption');
+  let h = tbl([
+    {t:'成本中心',f:r=>(r.center||'')+' '+(r.centerName||'')},
+    {t:'介质',f:r=>(r.energy||'')+' '+(r.energyName||'')},
+    {t:'用量',r:1,f:r=>num(r.qty)},
+    {t:'单位',k:'unit'},
+    {t:'折标煤 tce',r:1,f:r=>'<b>'+num(r.tce)+'</b>'},
+    {t:'碳排 tCO₂',r:1,f:r=>num(r.co2)},
+    {t:'计量点数',r:1,k:'meters'},
+    {t:'占比',f:r=>{const t=D.consumption.totalTce||1;const v=Math.round(r.tce/t*100);return '<div class="bar"><i style="width:'+v+'%"></i></div>';}}
+  ], rows);
+  h += '<div class="note" style="margin-top:14px">合计 '+num(D.consumption.totalTce)+' tce。口径：用量 × 介质折标煤系数逐点归集后按「中心 × 介质」聚合。</div>';
+  return h;
+}});
+
+page({id:'intensity', t:'单耗与基线', render(){
+  return tbl([
+    {t:'产线',k:'line'},
+    {t:'基线编码',k:'baselineCode'},
+    {t:'产品',k:'product'},
+    {t:'产量',r:1,f:r=>num(r.qty)},
+    {t:'综合能耗 tce',r:1,f:r=>num(r.tce)},
+    {t:'本期单耗',r:1,f:r=>'<b>'+r.unitEnergy+'</b>'},
+    {t:'基线单耗',r:1,f:r=>r.baseUnit},
+    {t:'偏离',r:1,f:r=>'<span class="'+sgn(r.deviation)+'">'+pct(r.deviation)+'</span>'},
+    {t:'级别',f:r=>'<span class="tag '+(r.level==='紧急'?'t-b':(r.level==='严重'||r.level==='警告'?'t-w':'t-ok'))+'">'+r.level+'</span>'},
+    {t:'单位产值能耗',r:1,f:r=>r.valueEnergy}
+  ], L('intensity'), '产线单耗与锁定基线对比。基线 = 基期综合能耗 ÷ 基期产量（6 位精度防小量级失真）。');
+}});
+
+page({id:'eff', t:'设备能效', render(){
+  const specs = (D.equipments && D.equipments.spec) || {};
+  let h = tbl([
+    {t:'编码',k:'code'},{t:'名称',k:'name'},{t:'类型',k:'etype'},
+    {t:'中心',k:'center'},
+    {t:'额定功率 kW',r:1,f:r=>num(r.rated_power)},
+    {t:'额定出力',r:1,f:r=>num(r.rated_output)},
+    {t:'最近实测',r:1,f:r=>r.lastValue!=null?'<b>'+num(r.lastValue)+'</b>':'—'},
+    {t:'指标',f:r=>r.metric||'—'},
+    {t:'评级',f:r=>r.lastGrade?'<span class="tag '+(r.lastGrade==='优'?'t-ok':(r.lastGrade==='良'?'t-i':'t-b'))+'">'+r.lastGrade+'</span>':'—'},
+    {t:'测试日期',f:r=>r.lastAt||'—'}
+  ], L('equipments'));
+  h += '<h2>能效评级标准</h2>' + tbl([
+    {t:'设备类型',k:'etype'},
+    {t:'指标',f:r=>r.metric},
+    {t:'单位',f:r=>r.unit||'—'},
+    {t:'优',r:1,f:r=>num(r.good)},
+    {t:'良',r:1,f:r=>num(r.fair)},
+    {t:'方向',f:r=>r.lower_better?'越低越好':'越高越好'}
+  ], Object.keys(specs).map(k=>({etype:k, ...specs[k]})));
+  h += '<div class="note">劣化判定：与上次实测对比，劣化幅度超 5% 自动生成「能效劣化」提示告警。空压机比功率 = 输入功率 ÷ 排气量；水泵效率 = 有效功率 ÷ 轴功率；锅炉热效率 = 有效吸热 ÷ 输入热量；制冷机 COP = 制冷量 ÷ 输入功率。</div>';
+  return h;
+}});
+
+page({id:'project', t:'节能项目', render(){
+  return tbl([
+    {t:'编号',k:'no'},{t:'项目名称',k:'name'},
+    {t:'中心',k:'center'},{t:'产线',k:'line'},
+    {t:'基线',k:'baseline_code'},
+    {t:'投资',r:1,f:r=>wan(r.invest)},
+    {t:'措施',k:'measure'},
+    {t:'实施期',f:r=>(r.start_period||'—')+' ~ '+(r.end_period||'—')},
+    {t:'负责人',k:'owner'},
+    {t:'状态',f:r=>{const m={'已验证':'t-ok','实施中':'t-i','待验证':'t-w','未达标':'t-b','待实施':'t-i'};return '<span class="tag '+(m[r.status]||'t-i')+'">'+(r.status||'—')+'</span>';}}
+  ], L('projects'));
+  // eslint-disable-next-line
+  h += '<div class="note" style="margin-top:14px">节能量 =（基线单耗 − 报告期单耗）× 报告期产量；年节费 = 节能量 × 标煤单价（620 元/tce，按验证月数年化）；回收期 = 投资 ÷ 年节费。验证需三闸口：有锁定基线、报告期有计量数据、产量不为 0。</div>';
+  return h;
+}});
+
+page({id:'alarm', t:'告警中心', render(){
+  const s = (D.alarmSummary && D.alarmSummary.summary) || {};
+  const bt = (D.alarmSummary && D.alarmSummary.byType) || [];
+  let h = '<div class="grid">'
+    + ['紧急','严重','警告','提示'].map(lv=>'<div class="card '+({紧急:'b',严重:'w'})[lv]||''+'"><div class="k">'+lv+'</div><div class="v">'+(s[lv]||0)+'<small>条</small></div></div>').join('')
+    + '<div class="card"><div class="k">待处置</div><div class="v">'+(s.未处置||0)+'<small>/ '+ (s.合计||0) +' 条</small></div></div>'
+    + '</div>';
+  if(bt.length){
+    const mx = Math.max(...bt.map(x=>x.count),1);
+    h += '<h2>告警类型分布</h2>' + tbl([
+      {t:'类型',k:'type'},
+      {t:'数量',r:1,k:'count'},
+      {t:'分布',f:r=>'<div class="bar"><i style="width:'+Math.max(3,Math.round(r.count/mx*100))+'%"></i></div>'}
+    ], bt);
+  }
+  const rows = L('alarms').slice(0,40);
+  h += '<h2>告警明细（最近 40 条）</h2>' + tbl([
+    {t:'告警号',k:'no'},
+    {t:'级别',f:r=>'<span class="tag '+({紧急:'t-b',严重:'t-w',警告:'t-w',提示:'t-i'})[r.level]||'t-i'+'">'+r.level+'</span>'},
+    {t:'类型',k:'atype'},
+    {t:'对象',k:'target'},
+    {t:'内容',f:r=>(r.message||'').slice(0,42)},
+    {t:'期间',k:'period'},
+    {t:'状态',f:r=>'<span class="tag '+(r.status==='待处置'?'t-w':'t-ok')+'">'+(r.status||'—')+'</span>'}
+  ], rows);
+  h += '<div class="note" style="margin-top:14px">分级与触发：需量 ≥95% 容量或单耗超基线 30% → 紧急；需量 ≥85% 或单耗超 15% → 严重；单耗超 8% 或抄表跳变 → 警告；抄表遗漏、能效劣化 → 提示。同一告警不可重复处置（409），处置留痕到审计日志。</div>';
+  return h;
+}});
+
+page({id:'budget', t:'能源预算', render(){
+  return tbl([
+    {t:'期间',k:'period'},
+    {t:'成本中心',f:r=>(r.center||'')+' '+(r.centerName||'')},
+    {t:'介质',f:r=>(r.energy_code||'')+' '+(r.energyName||'')},
+    {t:'预算额',r:1,f:r=>money(r.amount)},
+    {t:'已用',r:1,f:r=>money(r.used)},
+    {t:'剩余',r:1,f:r=>money(r.left)},
+    {t:'执行率',r:1,f:r=>pct(r.rate)},
+    {t:'进度',f:r=>{const v=Math.min((r.rate||0)*100,100);const c=(r.rate||0)>1?'b':((r.rate||0)>=0.9?'w':'');return '<div class="bar"><i class="'+c+'" style="width:'+v+'%"></i></div>';}},
+    {t:'状态',f:r=>{const v=r.rate||0;const t=v>1.1?['阻断','t-b']:(v>1?['超支','t-b']:(v>=0.9?['预警','t-w']:['正常','t-ok']));return '<span class="tag '+t[1]+'">'+t[0]+'</span>';}}
+  ], L('budgets'));
+}});
+
+page({id:'carbon', t:'碳排放', render(){
+  const t = (D.carbon && D.carbon.total) || {};
+  let h = '<div class="grid">'
+    + '<div class="card"><div class="k">总碳排</div><div class="v">'+num(t.total)+'<small>tCO₂</small></div></div>'
+    + '<div class="card b"><div class="k">范围一（直接）</div><div class="v">'+num(t.scope1)+'<small>tCO₂</small></div></div>'
+    + '<div class="card u"><div class="k">范围二（外购）</div><div class="v">'+num(t.scope2)+'<small>tCO₂</small></div></div>'
+    + '</div>';
+  h += '<h2>分介质碳排</h2>' + tbl([
+    {t:'介质',f:r=>(r.energy||'')+' '+(r.name||'')},
+    {t:'核算范围',f:r=>'<span class="tag '+(r.scope==='范围一'?'t-b':'t-i')+'">'+r.scope+'</span>'},
+    {t:'用量',r:1,f:r=>num(r.qty)},
+    {t:'单位',k:'unit'},
+    {t:'因子 tCO₂/单位',r:1,f:r=>num(r.factor)},
+    {t:'碳排 tCO₂',r:1,f:r=>'<b>'+num(r.co2)+'</b>'}
+  ], D.carbon ? (D.carbon.byEnergy||[]) : []);
+  const mo = (D.carbon && D.carbon.months) || [];
+  if(mo.length){
+    h += '<h2>近 3 期碳排趋势</h2><div class="chart">' + lineChart(mo,'co2','#e0544b',v=>v.toFixed(0)) + '</div>';
+  }
+  h += '<div class="note">碳排 = Σ 物理量 × 碳排因子。范围一为直接排放（天然气、柴油）；范围二为外购能源间接排放（电力、蒸汽、自来水、压缩空气）。电力因子 0.000581 tCO₂/kWh。</div>';
+  return h;
+}});
+
+page({id:'balance', t:'能源平衡', render(){
+  const bal = (D.balance && D.balance.balance) || {};
+  let h = '<div class="grid">'
+    + '<div class="card"><div class="k">输入合计</div><div class="v">'+num(bal.totalIn)+'<small>tce</small></div></div>'
+    + '<div class="card u"><div class="k">使用合计</div><div class="v">'+num(bal.usedTce)+'<small>tce</small></div></div>'
+    + '<div class="card"><div class="k">损耗</div><div class="v">'+num(bal.lossTce)+'<small>tce</small></div></div>'
+    + '<div class="card"><div class="k">校验差</div><div class="v" style="color:#3fd0c9">'+money(bal.checkDiff)+'</div></div>'
+    + '</div>';
+  h += '<h2>分介质输入</h2>' + tbl([
+    {t:'介质',k:'name'},{t:'编码',k:'energy'},
+    {t:'用量',r:1,f:r=>num(r.qty)},{t:'单位',k:'unit'},
+    {t:'折标煤 tce',r:1,f:r=>'<b>'+num(r.tce)+'</b>'}
+  ], D.balance ? (D.balance.byEnergy||[]) : []);
+  h += '<h2>分中心使用</h2>' + tbl([
+    {t:'成本中心',f:r=>(r.center||'')+' '+(r.centerName||'')},
+    {t:'折标煤 tce',r:1,f:r=>'<b>'+num(r.tce)+'</b>'}
+  ], D.balance ? (D.balance.byCenter||[]) : []);
+  h += '<div class="note">能源平衡表：输入合计 = Σ 介质折标煤；使用合计 = Σ 中心折标煤；损耗 = 输入 − 使用；校验差 = 输入 − 使用 − 损耗，恒为 0。</div>';
+  return h;
+}});
+
+let cur = PAGES[0].id;
+function go(id){
+  cur = id;
+  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on', b.dataset.id===id));
+  const p = PAGES.find(x=>x.id===id);
+  $('#main').innerHTML = p.render();
+  window.scrollTo(0,0);
+}
+$('#nav').innerHTML = PAGES.map(p=>'<button data-id="'+p.id+'" onclick="go(\''+p.id+'\')">'+p.t+'</button>').join('');
+go(cur);
+</script>
+</body>
+</html>
