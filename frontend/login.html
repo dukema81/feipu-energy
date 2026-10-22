@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>飞瀑能源管理系统</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="login-wrap">
+  <form class="login-card" id="form">
+    <h2>飞瀑能源管理系统</h2>
+    <div class="sub">能源计量 · 能耗分析 · 能效诊断 · 碳排核算</div>
+    <div class="f">
+      <label>账号</label>
+      <input id="username" autocomplete="username" placeholder="请输入账号" value="admin">
+    </div>
+    <div class="f">
+      <label>口令</label>
+      <input id="password" type="password" autocomplete="current-password" placeholder="请输入口令">
+    </div>
+    <div class="login-err" id="err"></div>
+    <button class="btn pri" type="submit">登 录</button>
+    <div style="margin-top:18px;font-size:12px;color:#6b8299;line-height:1.9">
+      演示账号：admin / energy@2026<br>
+      其他角色：manager · staff · reader · engineer · prod · finance（口令相同）
+    </div>
+  </form>
+</div>
+<script>
+const F = document.getElementById('form');
+document.getElementById('password').focus();
+F.addEventListener('submit', async e => {
+  e.preventDefault();
+  const err = document.getElementById('err');
+  err.textContent = '';
+  const username = document.getElementById('username').value.trim();
+  const password = document.getElementById('password').value;
+  if (!username || !password) { err.textContent = '请填写账号与口令'; return; }
+  try {
+    const r = await fetch('api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    const j = await r.json();
+    if (j.code !== 200) { err.textContent = j.message || '登录失败'; return; }
+    localStorage.setItem('fp_token', j.data.token);
+    localStorage.setItem('fp_user', JSON.stringify(j.data.user));
+    location.href = 'index.html';
+  } catch (x) {
+    err.textContent = '网络异常，请检查服务是否启动';
+  }
+});
+</script>
+</body>
+</html>
